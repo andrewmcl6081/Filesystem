@@ -35,8 +35,9 @@ struct inode
 };
 
 struct inode* inodes;
-
 FILE* fp;
+char image_name[64];
+uint8_t image_open;
 
 
 
@@ -60,6 +61,10 @@ void init()
 
   //inodes will point to beginning of our inodes (blocks 20-276)
   inodes = (struct inode*) &data[20][0];
+
+  //zero out the image name and set it as not open
+  memset(image_name, 0, 64);
+  image_open = 0;
 
   int i;
   for(i = 0; i < NUM_FILES; i++)
@@ -87,11 +92,34 @@ void init()
 
 void createfs(char* filename)
 {
-  fp = fopen(filename, "r");
+  fp = fopen(filename, "w");
+
+  strncpy(image_name, filename, strlen(filename));
 
   memset(data, 0, NUM_BLOCKS * BLOCK_SIZE);
 
+  image_open = 1;
+
   fclose(fp);
+}
+
+
+void savefs()
+{
+    if(image_open == 0)
+    {
+        printf("ERROR: Disk image is not open\n");
+        return;
+    }
+
+    fp = fopen(image_name, "w");
+
+    fwrite(&data[0][0], BLOCK_SIZE, NUM_BLOCKS, fp);
+
+    //zero it back out, arent using it anymore
+    memset(image_name, 0, 64);
+
+    fclose(fp);
 }
 
 
@@ -151,14 +179,14 @@ int main()
     }
 
 
+
+
     //handle blank line input
     if(token[0] == NULL)
     {
       free(head_ptr);
       continue;
     }
-
-
 
     // process the filesystem commands
     if(!strcmp("createfs", token[0]))
@@ -172,7 +200,10 @@ int main()
       createfs(token[1]);
     }
 
-
+    if(!strcmp("savefs", token[0]))
+    {
+      savefs();
+    }
 
    
 
