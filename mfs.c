@@ -13,8 +13,13 @@
 #define NUM_BLOCKS 65536
 #define BLOCKS_PER_FILE 1024
 #define NUM_FILES 256
+#define FIRST_DATA_BLOCK 790
 
 uint8_t data[NUM_BLOCKS][BLOCK_SIZE];
+
+// 512 blocks just for free block map
+uint8_t * free_blocks;
+uint8_t * free_inodes;
 
 
 // directory
@@ -58,10 +63,14 @@ uint8_t image_open;
 void init()
 {
   //directory pointer will point to the beginning of our directory (blocks 0-18)
-  directory = (struct directoryEntry*)&data[0][0];
+  directory = (struct directoryEntry*) &data[0][0];
 
   //inodes will point to beginning of our inodes (blocks 20-276)
-  inodes = (struct inode*)&data[20][0];
+  inodes = (struct inode*) &data[20][0];
+
+  free_blocks = (uint8_t*) &data[277][0];
+
+  free_inodes = (uint8_t*) &data[19][0];
 
   //zero out the image name and set it as not open
   memset(image_name, 0, 64);
@@ -76,6 +85,8 @@ void init()
     //setting each directory entry's inode to -1
     directory[i].inode = -1;
 
+    free_inodes[i] = 1;
+
     memset(directory[i].filename, 0, 64);
 
     int j;
@@ -89,9 +100,33 @@ void init()
 
       //setting attribute init value
       inodes[i].attribute = 0;
+
+
     }
   }
 
+  int j;
+  for(j = 0; j < NUM_BLOCKS; j++)
+  {
+    free_blocks[j] = 1;
+  }
+
+}
+
+
+void df()
+{
+  int j;
+  int count = 0;
+  for(j = FIRST_DATA_BLOCK; j < NUM_BLOCKS; j++)
+  {
+    if(free_blocks[j])
+    {
+      count++;
+    }
+  }
+
+  printf("%d bytes free\n", count * BLOCK_SIZE);
 }
 
 
@@ -135,7 +170,7 @@ void savefs()
 void openfs(char* filename)
 {
   //open image to write to
-  fp = fopen(filename, "r");
+  fp = fopen(filename, "w");
 
   strncpy(image_name, filename, strlen(filename));
 
@@ -173,6 +208,7 @@ void list()
 
   for(i = 0; i < NUM_FILES; i++)
   {
+    //\TODO Add a check to not list if the file is hidden
     if(directory[i].in_use == 1)
     {
       not_found = 0;
@@ -199,7 +235,6 @@ int main()
   fp = NULL;
 
   init();
-
 
   while( 1 )
   {
@@ -310,6 +345,19 @@ int main()
       }
 
       list();
+    }
+
+
+    //disk free space
+    if(!strcmp("df", token[0]))
+    {
+      if(!image_open)
+      {
+        printf("ERROR: Disk image is not open\n");
+        continue;
+      }
+
+      df();
     }
 
    
