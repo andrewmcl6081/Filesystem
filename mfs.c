@@ -14,12 +14,12 @@
 #define NUM_BLOCKS 65536
 #define BLOCKS_PER_FILE 1024 // = a file that is 1MB or 1,048,576 Bytes
 #define NUM_FILES 256
-#define FIRST_DATA_BLOCK 1001
+#define FIRST_DATA_BLOCK 345 // block our data begins at
 #define MAX_FILE_SIZE 1048576 //Bytes
 
 uint8_t data[NUM_BLOCKS][BLOCK_SIZE];
 
-// 512 blocks just for free block map
+// 341 blocks for free block map
 uint8_t * free_blocks;
 uint8_t * free_inodes;
 
@@ -58,19 +58,24 @@ uint8_t image_open;
                                 // will separate the tokens on our command line
 
 #define MAX_COMMAND_SIZE 255    // The maximum command-line size
+#define MAX_NUM_ARGUMENTS 15
 
-#define MAX_NUM_ARGUMENTS 11  //11   // Mav shell only supports four arguments
 
-#define MAX_HIST_STORED 15   //15   // Maximum number of commands to store in history
 
+
+// because our free_blocks pointer can handle a reference to any
+// number from 0 to NUM_BLOCKS and our data begins at block
+// 345 we will index our free block map from 345 to 65536
+// i will be in an inclusive range of 345 to 65535
+// its okay we lose one block at the end 
 int32_t findFreeBlock()
 {
   int i;
-  for( i = 0; i < NUM_BLOCKS; i++)
+  for( i = FIRST_DATA_BLOCK; i < NUM_BLOCKS; i++)
   {
     if(free_blocks[i])
     {
-      return i + 1001;
+      return i;
     }
   }
 
@@ -78,6 +83,9 @@ int32_t findFreeBlock()
 }
 
 
+// we will index block 19 moving 1 byte at a time
+// to find a free inode. Only moving 256 times
+// because we have 1 inode per file
 int32_t findFreeInode()
 {
   int i;
@@ -93,6 +101,8 @@ int32_t findFreeInode()
 }
 
 
+// Looking for a free block within our
+// inode we found to be free
 int32_t findFreeInodeBlock(int32_t inode)
 {
   int i;
@@ -111,35 +121,48 @@ int32_t findFreeInodeBlock(int32_t inode)
 
 void init()
 {
-  //directory pointer will point to the beginning of our directory (blocks 0-18)
+  // directory pointer will point to the beginning of our directory (blocks 0-18)
   directory = (struct directoryEntry*) &data[0][0];
 
-  //inodes will point to beginning of our inodes (blocks 20-276)
+  // inodes will point to beginning of our inodes (blocks 20-276)
+  // enough for 256 inode structs
   inodes = (struct inode*) &data[20][0];
 
-  free_blocks = (uint8_t*) &data[1000][0];
 
+  // block 277 to 344 can easily store enough 1 byte ints to reference
+  // 65536 blocks. Plenty of room plus a little left over room for
+  // a safety buffer
+  free_blocks = (uint8_t*) &data[277][0];
+
+
+  // we have enough space in one block to keep track of 256 inodes
+  // using a 1 or 0 to represent free or not
   free_inodes = (uint8_t*) &data[19][0];
 
-  //zero out the image name and set it as not open
+  // zero out the image name and set it as not open
   memset(image_name, 0, 64);
   image_open = 0;
+
 
   int i;
   for(i = 0; i < NUM_FILES; i++)
   {
-    //setting the directory entries to available
+    // setting the directory entries to available
     directory[i].in_use = 0;
 
-    //setting each directory entry's inode to -1
+    // setting each directory entry's inode to -1
     directory[i].inode = -1;
-
+    
+    // indexing block 19 where all of our inodes are kept
+    // for 256 files and setting them as available
     free_inodes[i] = 1;
 
     memset(directory[i].filename, 0, 64);
 
 
-    //initialize our inodes (20 - 276)
+    // initialize our inodes stored in blocks
+    // 20 to 276 and initializing all the blocks
+    // that an inode keeps track of to -1, not inuse.
     int j;
     for(j = 0; j < NUM_BLOCKS; j++)
     {
@@ -150,8 +173,12 @@ void init()
     }
   }
 
+  
+  // initialize our free block map stored at block
+  // 277 - 344. start at 345 run to NUM_BLOCKS because our first
+  // data block is 345
   int j;
-  for(j = 0; j < NUM_BLOCKS; j++)
+  for(j = FIRST_DATA_BLOCK; j < NUM_BLOCKS; j++)
   {
     free_blocks[j] = 1;
   }
@@ -163,6 +190,10 @@ uint32_t df()
 {
   int j;
   int count = 0;
+
+  // Use our free block map location (not where the actual data is stored)
+  // and run from 345 (first data block) to NUM_BLOCKS
+  // checking if they are in use
   for(j = FIRST_DATA_BLOCK; j < NUM_BLOCKS; j++)
   {
     if(free_blocks[j])
@@ -171,6 +202,9 @@ uint32_t df()
     }
   }
 
+  // return the numb of inuse blocks
+  // multiplied by the # bytes stored in 
+  // each block
   return count * BLOCK_SIZE;
 }
 
@@ -179,7 +213,8 @@ uint32_t df()
 void createfs(char* filename)
 {
   fp = fopen(filename, "w");
-
+  
+  // copy new filesystem filename to image_name
   strncpy(image_name, filename, strlen(filename));
 
   memset(data, 0, NUM_BLOCKS * BLOCK_SIZE);
@@ -206,7 +241,7 @@ void createfs(char* filename)
   }
 
   int j;
-  for(j = 0; j < NUM_BLOCKS; j++)
+  for(j = FIRST_DATA_BLOCK; j < NUM_BLOCKS; j++)
   {
     free_blocks[j] = 1;
   }
@@ -298,24 +333,25 @@ void list()
 }
 
 
-//insert a file into system
+// insert a file into system
 void insert(char* filename)
 {
-  //verify filename is not NULL
+  // verify filename is not NULL
   if(filename == NULL)
   {
     printf("ERROR: Filename is Null\n");
   }
 
-  //verify the file exists
+
+  // verify the file exists
   struct stat buf;
   int ret = stat(filename, &buf);
-
   if(ret == -1)
   {
     printf("ERROR: File does not exist\n");
     return;
   }
+
 
   //verify the file is not too big
   if(buf.st_size > MAX_FILE_SIZE)
@@ -324,12 +360,14 @@ void insert(char* filename)
     return;
   }
 
+
   //verify there is enough space
   if(buf.st_size > df())
   {
     printf("ERROR: Not enough free disk space\n");
     return;
   }
+
 
   //find an empty directory
   int i;
@@ -350,29 +388,30 @@ void insert(char* filename)
     return;
   }
 
+
   // Open the input file read-only
   FILE* ifp = fopen(filename, "r");
   printf("Reading %d bytes from %s\n", (int) buf.st_size, filename);
 
+
   // Save off the size of the input file since we'll use it in a couple of places and
   // also initialize our index variables to zero
   int32_t copy_size = buf.st_size;
+
 
   // We want to copy and write in chunks of BLOCK_SIZE. So to do this
   // we are going to use fseek to move along our file stream in chunks of BLOCK_SIZE.
   // We will copy bytes, increment our file pointer by BLOCK_SIZE and repeat.
   int32_t offset = 0;
 
-  // We are going to copy and store our file in BLOCK_SIZE chunks instead of one big
-  // memory pool. Why? We are simulating the way the file system stores file data in
-  // blocks of space on the disk. block_index will keep us pointing to the area that
-  // we will read from or write to.
+
+  // Initializing to -1 we will then look for freeblocks we can store our
+  // data to  
   int32_t block_index = -1; //using our block map to find a free block
 
 
-  // find a free inode
+  // find a free inode from our inode map
   int32_t inode_index = findFreeInode();
-
   if(inode_index == -1)
   {
     printf("ERROR: Can not find a free inode\n");
@@ -385,7 +424,11 @@ void insert(char* filename)
   directory[directory_entry].inode = inode_index;
   strncpy(directory[directory_entry].filename, filename, strlen(filename));
 
+
+  // Take our found free indoe and set file size and set unavailable
   inodes[inode_index].file_size = buf.st_size;
+  inodes[inode_index].in_use = 1;
+
 
   // copy_size is initialized to the size of the input file so each loop iteration we
   // will copy BLOCK_SIZE bytes from the file then reduce our copy_size counter by
@@ -400,9 +443,6 @@ void insert(char* filename)
     // make us copy from offset 0, BLOCK_SIZE, 2*BLOCK_SIZE, 3*BLOCK_SIZE, etc.
     fseek(ifp, offset, SEEK_SET);
 
-    // Read BLOCK_SIZE number of bytes from the input file and store them in our
-    // data array.
-
 
     // find a free block
     block_index = findFreeBlock();
@@ -411,13 +451,21 @@ void insert(char* filename)
       printf("ERROR: Can not find a free block\n");
       return;
     }
+
+    // If we found a free block in our free block map
+    // and mark it as being used.
+    free_blocks[block_index] = 0;
+
     
+    // Reading our data into our data array
     int32_t bytes = fread(data[block_index], BLOCK_SIZE, 1, ifp);
 
 
-    // need to save the block in the inode
-    int32_t inode_block = findFreeInodeBlock(inode_index);
-    inodes[inode_index].blocks[inode_block] = block_index;
+    // With our freely found inode, locate a free block with
+    // the inode blocks array and record the block_index into 
+    // our blocks array in the inode
+    int32_t free_inode_block = findFreeInodeBlock(inode_index);
+    inodes[inode_index].blocks[free_inode_block] = block_index;
 
 
     // If bytes == 0 and we haven't reached the end of the file then something is
@@ -438,10 +486,6 @@ void insert(char* filename)
     // Increase the offset into our input file by BLOCK_SIZE. This will allow
     // the fseek at the top of the loop to position us to the correct spot.
     offset += BLOCK_SIZE;
-
-    // Increment the index into the block array
-    // Do NOT just increment block index in your filesystem
-    block_index = findFreeBlock();
   } 
 
   // We are done copying from the input file so close it out
