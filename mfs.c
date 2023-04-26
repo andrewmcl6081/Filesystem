@@ -75,6 +75,7 @@ int32_t findFreeBlock()
   {
     if(free_blocks[i])
     {
+      free_blocks[i] = 0;
       return i;
     }
   }
@@ -93,6 +94,7 @@ int32_t findFreeInode()
   {
     if(free_inodes[i])
     {
+      free_inodes[i] = 0;
       return i;
     }
   }
