@@ -10,12 +10,12 @@
 #include <stdint.h>
 #include <sys/stat.h>
 
-#define BLOCK_SIZE 1024
+#define BLOCK_SIZE 1024 //Bytes
 #define NUM_BLOCKS 65536
-#define BLOCKS_PER_FILE 1024
+#define BLOCKS_PER_FILE 1024 // = a file that is 1MB or 1,048,576 Bytes
 #define NUM_FILES 256
-#define FIRST_DATA_BLOCK 790
-#define MAX_FILE_SIZE 1048576
+#define FIRST_DATA_BLOCK 1001
+#define MAX_FILE_SIZE 1048576 //Bytes
 
 uint8_t data[NUM_BLOCKS][BLOCK_SIZE];
 
@@ -70,7 +70,7 @@ int32_t findFreeBlock()
   {
     if(free_blocks[i])
     {
-      return i + 790;
+      return i + 1001;
     }
   }
 
@@ -93,6 +93,21 @@ int32_t findFreeInode()
 }
 
 
+int32_t findFreeInodeBlock(int32_t inode)
+{
+  int i;
+  for(i = 0; i < BLOCKS_PER_FILE; i++)
+  {
+    if(inodes[inode].blocks[i] == -1)
+    {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+
 
 void init()
 {
@@ -102,7 +117,7 @@ void init()
   //inodes will point to beginning of our inodes (blocks 20-276)
   inodes = (struct inode*) &data[20][0];
 
-  free_blocks = (uint8_t*) &data[277][0];
+  free_blocks = (uint8_t*) &data[1000][0];
 
   free_inodes = (uint8_t*) &data[19][0];
 
@@ -171,6 +186,31 @@ void createfs(char* filename)
 
   image_open = 1;
 
+  int i;
+  for(i = 0; i < NUM_FILES; i++)
+  {
+    directory[i].in_use = 0;
+    directory[i].inode = -1;
+    free_inodes[i] = 1;
+
+    memset(directory[i].filename, 0, 64);
+
+    int j;
+    for(j = 0; j < NUM_BLOCKS; j++)
+    {
+      inodes[i].blocks[j] = -1;
+      inodes[i].in_use = 0;
+      inodes[i].attribute = 0;
+      inodes[i].file_size = 0;
+    }
+  }
+
+  int j;
+  for(j = 0; j < NUM_BLOCKS; j++)
+  {
+    free_blocks[j] = 1;
+  }
+
   fclose(fp);
 }
 
@@ -199,8 +239,8 @@ void savefs()
 //open the filesytem image and parse all of our data
 void openfs(char* filename)
 {
-  //open image to write to
-  fp = fopen(filename, "w");
+  //open image to read from
+  fp = fopen(filename, "r");
 
   strncpy(image_name, filename, strlen(filename));
 
@@ -329,6 +369,24 @@ void insert(char* filename)
   // we will read from or write to.
   int32_t block_index = -1; //using our block map to find a free block
 
+
+  // find a free inode
+  int32_t inode_index = findFreeInode();
+
+  if(inode_index == -1)
+  {
+    printf("ERROR: Can not find a free inode\n");
+    return;
+  }
+
+
+  // place the file info in the directory
+  directory[directory_entry].in_use = 1;
+  directory[directory_entry].inode = inode_index;
+  strncpy(directory[directory_entry].filename, filename, strlen(filename));
+
+  inodes[inode_index].file_size = buf.st_size;
+
   // copy_size is initialized to the size of the input file so each loop iteration we
   // will copy BLOCK_SIZE bytes from the file then reduce our copy_size counter by
   // BLOCK_SIZE number of bytes. When copy_size is less than or equal to zero we know
@@ -345,36 +403,30 @@ void insert(char* filename)
     // Read BLOCK_SIZE number of bytes from the input file and store them in our
     // data array.
 
+
     // find a free block
     block_index = findFreeBlock();
-
     if(block_index == -1)
     {
       printf("ERROR: Can not find a free block\n");
       return;
     }
-
-    // find a free inode
-    int32_t inode_index = findFreeInode();
-
-    if(inode_index == -1)
-    {
-      printf("ERROR: Can not find a free inode\n");
-      return;
-    }
-
-    // place the file info in the directory
-    directory[directory_entry].in_use = 1;
-
+    
     int32_t bytes = fread(data[block_index], BLOCK_SIZE, 1, ifp);
+
+
+    // need to save the block in the inode
+    int32_t inode_block = findFreeInodeBlock(inode_index);
+    inodes[inode_index].blocks[inode_block] = block_index;
+
 
     // If bytes == 0 and we haven't reached the end of the file then something is
     // wrong. If 0 is returned and we also have the EOF flag set then that is OK.
     // It means we've reached the end of our input file.
     if( bytes == 0 && !feof(ifp))
     {
-      printf("An error occured reading from the input file\n");
-      return -1;
+      printf("ERROR: An error occured reading from the input file\n");
+      return;
     }
 
     // Clear the EOF file flag
@@ -389,7 +441,7 @@ void insert(char* filename)
 
     // Increment the index into the block array
     // Do NOT just increment block index in your filesystem
-    block_index++;
+    block_index = findFreeBlock();
   } 
 
   // We are done copying from the input file so close it out
