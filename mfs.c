@@ -79,6 +79,7 @@ int32_t findFreeBlock()
   {
     if(free_blocks[i])
     {
+      // Mark block as now unavailable
       free_blocks[i] = 0;
       return i;
     }
@@ -98,6 +99,7 @@ int32_t findFreeInode()
   {
     if(free_inodes[i])
     {
+      // Mark inode as now unavailable
       free_inodes[i] = 0;
       return i;
     }
@@ -462,12 +464,8 @@ void insert(char* filename)
       return;
     }
 
-    // If we found a free block in our free block map
-    // and mark it as being used.
-    free_blocks[block_index] = 0;
-
     
-    // Reading our data into our data array
+    // Reading our data from file into our data array
     int32_t bytes = fread(data[block_index], BLOCK_SIZE, 1, ifp);
 
 
