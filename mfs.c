@@ -71,7 +71,9 @@ uint8_t image_open;
 
 // "free_blocks" points to block number 1047
 // each index number directly corresponds to
-// a block that is allocated for file data 
+// a block that is allocated for file data
+// need to add 1,112 to the result to get the appropriate
+// location of where data actually starts
 int32_t findFreeBlock()
 {
   int i;
@@ -79,9 +81,9 @@ int32_t findFreeBlock()
   {
     if(free_blocks[i])
     {
-      // Mark block as now unavailable
+      // Mark free block as in use in the free_blocks map
       free_blocks[i] = 0;
-      return i;
+      return i + 1112;
     }
   }
 
@@ -99,7 +101,7 @@ int32_t findFreeInode()
   {
     if(free_inodes[i])
     {
-      // Mark inode as now unavailable
+      // Mark free inode as in use in the free_inode map
       free_inodes[i] = 0;
       return i;
     }
