@@ -11,16 +11,22 @@
 #include <sys/stat.h>
 
 #define BLOCK_SIZE 1024 //Bytes
-#define NUM_BLOCKS 65536
+#define NUM_BLOCKS 66370
+#define NUM_BLOCKS_FOR_FILE_DATA 65258
 #define BLOCKS_PER_FILE 1024 // = a file that is 1MB or 1,048,576 Bytes
 #define NUM_FILES 256
-#define FIRST_DATA_BLOCK 345 // block our data begins at
+#define FIRST_DATA_BLOCK 1112 // block our data begins at. if we start at 1,112 and add
+                              // the required number of blocks that should be available
+                              // to files (65,258), we get to a new NUM_BLOCKS of 66370
+
 #define MAX_FILE_SIZE 1048576 //Bytes
 
 uint8_t data[NUM_BLOCKS][BLOCK_SIZE];
 
-// 341 blocks for free block map
+// 64 blocks needed for free_blocks
 uint8_t * free_blocks;
+
+// 1 block needed for free_inodes
 uint8_t * free_inodes;
 
 
@@ -63,15 +69,13 @@ uint8_t image_open;
 
 
 
-// because our free_blocks pointer can handle a reference to any
-// number from 0 to NUM_BLOCKS and our data begins at block
-// 345 we will index our free block map from 345 to 65536
-// i will be in an inclusive range of 345 to 65535
-// its okay we lose one block at the end 
+// "free_blocks" points to block number 1047
+// each index number directly corresponds to
+// a block that is allocated for file data 
 int32_t findFreeBlock()
 {
   int i;
-  for( i = FIRST_DATA_BLOCK; i < NUM_BLOCKS; i++)
+  for( i = 0; i < NUM_BLOCKS_FOR_FILE_DATA; i++)
   {
     if(free_blocks[i])
     {
@@ -124,17 +128,19 @@ int32_t findFreeInodeBlock(int32_t inode)
 void init()
 {
   // directory pointer will point to the beginning of our directory (blocks 0-18)
+  // we can fit 256 directory entries in 18 blocks
   directory = (struct directoryEntry*) &data[0][0];
 
-  // inodes will point to beginning of our inodes (blocks 20-276)
+
+  // inodes will point to beginning of our inodes treated
+  // as inode structs from (blocks 20-1046)
   // enough for 256 inode structs
   inodes = (struct inode*) &data[20][0];
+  
 
-
-  // block 277 to 344 can easily store enough 1 byte ints to reference
-  // 65536 blocks. Plenty of room plus a little left over room for
-  // a safety buffer
-  free_blocks = (uint8_t*) &data[277][0];
+  // (blocks 1,047 - 1,111) can store enough 1 byte ints to reference
+  // 65,258 blocks of file data.
+  free_blocks = (uint8_t*) &data[1047][0];
 
 
   // we have enough space in one block to keep track of 256 inodes
@@ -155,32 +161,32 @@ void init()
     // setting each directory entry's inode to -1
     directory[i].inode = -1;
     
-    // indexing block 19 where all of our inodes are kept
+    // indexing block 19 where our free_inode map is kept
     // for 256 files and setting them as available
     free_inodes[i] = 1;
 
     memset(directory[i].filename, 0, 64);
 
 
-    // initialize our inodes stored in blocks
-    // 20 to 276 and initializing all the blocks
-    // that an inode keeps track of to -1, not inuse.
+    // initialize our block indexes stored in
+    // our inode structs to not in use.
     int j;
-    for(j = 0; j < NUM_BLOCKS; j++)
+    for(j = 0; j < BLOCKS_PER_FILE; j++)
     {
       inodes[i].blocks[j] = -1;
-      inodes[i].in_use = 0;
-      inodes[i].attribute = 0;
-      inodes[i].file_size = 0;
     }
+
+    // Initialize the rest of the data kept
+    inodes[i].in_use = 0;
+    inodes[i].attribute = 0;
+    inodes[i].file_size = 0;
   }
 
   
-  // initialize our free block map stored at block
-  // 277 - 344. start at 345 run to NUM_BLOCKS because our first
-  // data block is 345
+  // initialize our free block map stored at blocks 1047 - 1111.
+  // Start at 0 run to NUM_BLOCKS_FOR_FILE_DATA
   int j;
-  for(j = FIRST_DATA_BLOCK; j < NUM_BLOCKS; j++)
+  for(j = 0; j < NUM_BLOCKS_FOR_FILE_DATA; j++)
   {
     free_blocks[j] = 1;
   }
@@ -194,9 +200,9 @@ uint32_t df()
   int count = 0;
 
   // Use our free block map location (not where the actual data is stored)
-  // and run from 345 (first data block) to NUM_BLOCKS
+  // and run from 0 to NUM_BLOCKS_FOR_FILE_DATA
   // checking if they are in use
-  for(j = FIRST_DATA_BLOCK; j < NUM_BLOCKS; j++)
+  for(j = 0; j < NUM_BLOCKS_FOR_FILE_DATA; j++)
   {
     if(free_blocks[j])
     {
@@ -233,17 +239,19 @@ void createfs(char* filename)
     memset(directory[i].filename, 0, 64);
 
     int j;
-    for(j = 0; j < NUM_BLOCKS; j++)
+    for(j = 0; j < BLOCKS_PER_FILE; j++)
     {
       inodes[i].blocks[j] = -1;
-      inodes[i].in_use = 0;
-      inodes[i].attribute = 0;
-      inodes[i].file_size = 0;
     }
+
+    // Initialize the rest of the data kept
+    inodes[i].in_use = 0;
+    inodes[i].attribute = 0;
+    inodes[i].file_size = 0;
   }
 
   int j;
-  for(j = FIRST_DATA_BLOCK; j < NUM_BLOCKS; j++)
+  for(j = 0; j < NUM_BLOCKS_FOR_FILE_DATA; j++)
   {
     free_blocks[j] = 1;
   }
