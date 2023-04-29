@@ -579,7 +579,7 @@ void retrieve(char* filename, char* new_filename)
 
 }
 
-void read(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
+void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
 {
   int file_location = -1;
   int i;
@@ -634,9 +634,12 @@ void read(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
     num_blocks_to_read++;
     temp_req_bytes -= BLOCK_SIZE;
   }
+
   
   // Find out the first index of our block array within inode
-  // we should start reading at
+  // we should start looking at
+  // We are also able to then record the byte we should start
+  // reading at within the start block
   while(temp_start_byte > BLOCK_SIZE)
   {
     start_block_index++;
@@ -644,42 +647,68 @@ void read(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
   }
   
   
-  int i;
   int j;
   int32_t remaining_bytes = req_num_bytes;
+  int8_t start_at_start = 1;
 
-  // While the number of blocks we need to read is
-  // greater than zero we need to go through each block
-  // if the remaining number of bytes to read is greater than
-  // 1024 we will print out a whole block in hex. If it is
-  // not greater than 1024 we will just print out the remaining
-  // and no extra
   
+  // While we still have blocks we need to read
   while(num_blocks_to_read > 0)
   {
-    int32_t data_block = inodes[file_inode].blocks[start_block_index];
+
+    // Grab the data block to start reading at from the inode's 
+    // array of blocks
+    int32_t data_block_location = inodes[file_inode].blocks[start_block_index];
+
+    
+    // If we havent read any bytes yet, we will start
+    // reading at the requested starting byte
+    if(start_at_start)
+    {
+      j = temp_start_byte;
+    }
+    else
+    {
+      j = 0;
+    }
+
+
+    // If we need to read more bytes than 1024,
+    // then we will read to the end of the block
+    // or If we have less than a blocks worth of bytes
+    // to read we will just read the remainder
 
     if(remaining_bytes > BLOCK_SIZE)
     {
-      for(j = 0; j < BLOCK_SIZE; j++)
+      for(j; j < BLOCK_SIZE; j++)
       {
-        printf("%x",data[data_block][j]);
+        printf("%x",data[data_block_location][j]);
       }
-
-      remaining_bytes -= BLOCK_SIZE;
       printf("\n");
+
+
+      // Decrement the remaining bytes we need to read
+      // by 1024 and we will no longer need to start at
+      // start byte
+      remaining_bytes -= BLOCK_SIZE;
+      start_at_start = 0;
     }
     else
     {
       for(j = 0; j < remaining_bytes; j++)
       {
-        printf("%x",data[data_block][j]);
+        printf("%x",data[data_block_location][j]);
       }
-      
       printf("\n");
+
+
+      start_at_start = 0;
     }
 
     
+    // Increment the index within inode's array of blocks to
+    // set us up for retrieving the next data block location
+    // and decrement the number of blocks we have left to read
     start_block_index++;
     num_blocks_to_read --;
   }
@@ -874,7 +903,7 @@ int main()
         continue;
       }
 
-      read(token[1], token[2], token[3]);
+      read_bytes(token[1], (uint32_t) atoi(token[2]), (uint32_t) atoi(token[3]) );
     }
 
    
