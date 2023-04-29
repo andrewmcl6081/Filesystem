@@ -543,7 +543,7 @@ void retrieve(char* filename, char* new_filename)
   int32_t copy_size = inodes[file_inode].file_size;
 
 
-  while(inodes[file_inode].blocks[current_block] != (int32_t)-1)
+  while(inodes[file_inode].blocks[current_block] != (int32_t) -1)
   {
     int32_t bytes;
 
@@ -577,6 +577,114 @@ void retrieve(char* filename, char* new_filename)
 
   fclose(fp);
 
+}
+
+void read(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
+{
+  int file_location = -1;
+  int i;
+  for(i = 0; i < NUM_FILES; i++)
+  {
+    if(!strcmp(directory[i].filename, filename))
+    {
+      file_location = i;
+      break;
+    }
+  }
+
+
+  if(file_location == -1)
+  {
+    printf("ERROR: File not found\n");
+    return;
+  }
+
+
+  if(req_num_bytes == 0)
+  {
+    printf("ERROR: No bytes to read\n");
+    return;
+  }
+
+  
+  int32_t file_inode = directory[file_location].inode;
+  if(req_num_bytes > inodes[file_inode].file_size)
+  {
+    printf("ERROR: Request exceeds file size\n");
+    return;
+  }
+
+
+  uint32_t file_size = inodes[file_inode].file_size;
+  if( (start_byte + req_num_bytes) > file_size)
+  {
+    printf("ERROR: Specifications of request exceed file size\n");
+    return;
+  }
+
+  
+  uint32_t start_block_index = 0;
+  uint32_t temp_start_byte = start_byte;
+  uint32_t temp_req_bytes = req_num_bytes;
+  uint32_t num_blocks_to_read = 1;
+
+  // Find out how many blocks we need to read
+  while(temp_req_bytes > BLOCK_SIZE)
+  {
+    num_blocks_to_read++;
+    temp_req_bytes -= BLOCK_SIZE;
+  }
+  
+  // Find out the first index of our block array within inode
+  // we should start reading at
+  while(temp_start_byte > BLOCK_SIZE)
+  {
+    start_block_index++;
+    temp_start_byte -= BLOCK_SIZE;
+  }
+  
+  
+  int i;
+  int j;
+  int32_t remaining_bytes = req_num_bytes;
+
+  // While the number of blocks we need to read is
+  // greater than zero we need to go through each block
+  // if the remaining number of bytes to read is greater than
+  // 1024 we will print out a whole block in hex. If it is
+  // not greater than 1024 we will just print out the remaining
+  // and no extra
+  
+  while(num_blocks_to_read > 0)
+  {
+    int32_t data_block = inodes[file_inode].blocks[start_block_index];
+
+    if(remaining_bytes > BLOCK_SIZE)
+    {
+      for(j = 0; j < BLOCK_SIZE; j++)
+      {
+        printf("%x",data[data_block][j]);
+      }
+
+      remaining_bytes -= BLOCK_SIZE;
+      printf("\n");
+    }
+    else
+    {
+      for(j = 0; j < remaining_bytes; j++)
+      {
+        printf("%x",data[data_block][j]);
+      }
+      
+      printf("\n");
+    }
+
+    
+    start_block_index++;
+    num_blocks_to_read --;
+  }
+
+  return;
 }
 
 int main()
@@ -754,6 +862,19 @@ int main()
       }
 
       retrieve(token[1], token[2]);
+    }
+
+
+    //read
+    if(!strcmp("read", token[0]))
+    {
+      if(!image_open)
+      {
+        printf("ERROR: Disk image is not open\n");
+        continue;
+      }
+
+      read(token[1], token[2], token[3]);
     }
 
    
