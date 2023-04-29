@@ -502,6 +502,8 @@ void insert(char* filename)
   fclose(ifp);
 }
 
+
+// retrieve a file and place it into CWD
 void retrieve(char* filename, char* new_filename)
 {
   int i;
@@ -579,6 +581,8 @@ void retrieve(char* filename, char* new_filename)
 
 }
 
+
+// Read a specified number of bytes and print their hex value
 void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
 {
   int file_location = -1;
@@ -629,27 +633,27 @@ void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
   uint32_t num_blocks_to_read = 1;
 
   // Find out how many blocks we need to read
-  while(temp_req_bytes > BLOCK_SIZE)
+  while(temp_req_bytes > (uint32_t)BLOCK_SIZE)
   {
     num_blocks_to_read++;
     temp_req_bytes -= BLOCK_SIZE;
   }
-
+  
   
   // Find out the first index of our block array within inode
   // we should start looking at
   // We are also able to then record the byte we should start
   // reading at within the start block
-  while(temp_start_byte > BLOCK_SIZE)
+  while(temp_start_byte > (uint32_t)BLOCK_SIZE)
   {
     start_block_index++;
-    temp_start_byte -= BLOCK_SIZE;
+    temp_start_byte -= (uint32_t)BLOCK_SIZE;
   }
   
   
   int j;
   int32_t remaining_bytes = req_num_bytes;
-  int8_t start_at_start = 1;
+  int8_t start_at_req_start = 1;
 
   
   // While we still have blocks we need to read
@@ -663,7 +667,7 @@ void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
     
     // If we havent read any bytes yet, we will start
     // reading at the requested starting byte
-    if(start_at_start)
+    if(start_at_req_start)
     {
       j = temp_start_byte;
     }
@@ -691,18 +695,18 @@ void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
       // by 1024 and we will no longer need to start at
       // start byte
       remaining_bytes -= BLOCK_SIZE;
-      start_at_start = 0;
+      start_at_req_start = 0;
     }
     else
     {
-      for(j = 0; j < remaining_bytes; j++)
+      for(j; j < remaining_bytes; j++)
       {
         printf("%x",data[data_block_location][j]);
       }
       printf("\n");
 
 
-      start_at_start = 0;
+      start_at_req_start = 0;
     }
 
     
