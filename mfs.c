@@ -629,14 +629,14 @@ void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
   
   uint32_t start_block_index = 0;
   uint32_t temp_start_byte = start_byte;
-  uint32_t temp_req_bytes = req_num_bytes;
+  uint32_t req_bytes_temp = req_num_bytes;
   uint32_t num_blocks_to_read = 1;
 
   // Find out how many blocks we need to read
-  while(temp_req_bytes > (uint32_t)BLOCK_SIZE)
+  while(req_bytes_temp > (uint32_t)BLOCK_SIZE)
   {
     num_blocks_to_read++;
-    temp_req_bytes -= BLOCK_SIZE;
+    req_bytes_temp -= BLOCK_SIZE;
   }
   
   
@@ -649,76 +649,30 @@ void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
     start_block_index++;
     temp_start_byte -= (uint32_t)BLOCK_SIZE;
   }
-  
-  
-  int byte_location;
+       
+
   int32_t remaining_bytes = req_num_bytes;
-  int8_t start_at_req_start = 1;
+  int32_t data_block_location = inodes[file_inode].blocks[start_block_index];
+  int32_t curr_block_index = start_block_index;
 
-  
-  // While we still have blocks we need to read
-  while(num_blocks_to_read > 0)
+  while(remaining_bytes != 0)
   {
-
-    // Grab the data block to start reading at from the inode's 
-    // array of blocks
-    int32_t data_block_location = inodes[file_inode].blocks[start_block_index];
-
-    
-    // If we havent read any bytes yet, we will start
-    // reading at the requested starting byte
-    if(start_at_req_start && temp_start_byte != 0)
+    if(temp_start_byte == 1023)
     {
-      
-      byte_location = temp_start_byte;
-    }
-    else
-    {
-      byte_location = 0;
+      temp_start_byte = 0;
+      data_block_location = inodes[file_inode].blocks[curr_block_index];
     }
 
+    printf("%x", data[data_block_location][temp_start_byte]);
 
-    // If we need to read more bytes than 1024,
-    // then we will read to the end of the block
-    // or If we have less than a blocks worth of bytes
-    // to read we will just read the remainder
-
-    if(remaining_bytes > BLOCK_SIZE)
-    {
-      for(byte_location; byte_location < BLOCK_SIZE; byte_location++)
-      {
-        printf("%x",data[data_block_location][byte_location]);
-      }
-      printf("\n");
-
-
-      // Decrement the remaining bytes we need to read
-      // by 1024 and we will no longer need to start at
-      // start byte
-      remaining_bytes -= BLOCK_SIZE;
-      start_at_req_start = 0;
-    }
-    else
-    {
-      for(byte_location; byte_location < remaining_bytes; byte_location++)
-      {
-        printf("%x",data[data_block_location][byte_location]);
-      }
-      printf("\n");
-
-      start_at_req_start = 0;
-    }
-
-    
-    // Increment the index within inode's array of blocks to
-    // set us up for retrieving the next data block location
-    // and decrement the number of blocks we have left to read
-    start_block_index++;
-    num_blocks_to_read --;
+    temp_start_byte++;
+    remaining_bytes--;
   }
+  printf("\n");
 
   return;
 }
+
 
 int main()
 {
