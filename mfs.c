@@ -651,7 +651,7 @@ void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
   }
   
   
-  int j;
+  int byte_location;
   int32_t remaining_bytes = req_num_bytes;
   int8_t start_at_req_start = 1;
 
@@ -667,13 +667,14 @@ void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
     
     // If we havent read any bytes yet, we will start
     // reading at the requested starting byte
-    if(start_at_req_start)
+    if(start_at_req_start && temp_start_byte != 0)
     {
-      j = temp_start_byte;
+      
+      byte_location = temp_start_byte;
     }
     else
     {
-      j = 0;
+      byte_location = 0;
     }
 
 
@@ -684,9 +685,9 @@ void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
 
     if(remaining_bytes > BLOCK_SIZE)
     {
-      for(j; j < BLOCK_SIZE; j++)
+      for(byte_location; byte_location < BLOCK_SIZE; byte_location++)
       {
-        printf("%x",data[data_block_location][j]);
+        printf("%x",data[data_block_location][byte_location]);
       }
       printf("\n");
 
@@ -699,12 +700,11 @@ void read_bytes(char* filename, uint32_t start_byte, uint32_t req_num_bytes)
     }
     else
     {
-      for(j; j < remaining_bytes; j++)
+      for(byte_location; byte_location < remaining_bytes; byte_location++)
       {
-        printf("%x",data[data_block_location][j]);
+        printf("%x",data[data_block_location][byte_location]);
       }
       printf("\n");
-
 
       start_at_req_start = 0;
     }
